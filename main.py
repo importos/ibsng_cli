@@ -10,6 +10,11 @@ ibs.set_address("127.0.0.1:1237")
 from prompt_toolkit.shortcuts import prompt
 from prompt_toolkit.styles import Style
 from prompt_toolkit.output import ColorDepth
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+
+
+session = PromptSession(history=FileHistory('.ibsng_history'))
 
 style = Style.from_dict({
     # User input (default text).
@@ -211,7 +216,7 @@ while True:
     message[2]=('class:path',     address)
     message[4]=('class:path',     "/".join(path))
     print(path)
-    text = prompt(message, completer=completer, style=style, color_depth=ColorDepth.TRUE_COLOR,
+    text = session.prompt(message, completer=completer, style=style, color_depth=ColorDepth.TRUE_COLOR,
                   complete_while_typing=True)
     if text == "exit" :
         break

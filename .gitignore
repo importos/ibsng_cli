@@ -1,2 +1,3 @@
 temp.log
 *.py[co]
+.ibsng_history
