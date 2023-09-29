@@ -56,7 +56,7 @@ def get_commands_list(path = path):
     o1 = {}
     l1 = os.listdir(module_path)
     for itm in l1:
-        if itm == "__init__.py":
+        if itm.startswith( "__"):
             continue
         o2 = {}
         if os.path.isdir(os.path.join(module_path,itm)):
@@ -82,9 +82,18 @@ class dots:
         if isinstance(__value,dots):
             return self.number == __value.number
         return False
+    
+def load_module(path):
+    if path[-1]is None:
+        name = ("modules"+(".".join(path[:-1])))[:-3]
+    else:
+        name = ("modules"+(".".join(path)))[:-3]
+
+    module = importlib.import_module(name)
+    logging.debug(str(module))
+    return module
 def parse_commands(commnads_text):
     global path
-    l1 = get_commands_list()
 
     lexer = []
     if commnads_text:
@@ -99,12 +108,8 @@ def parse_commands(commnads_text):
     #     for itm in parts:
     #         logging.debug(itm)
     
-    if (len(lexer)>0) and (lexer[0]=="/"):
-        lexer.pop(0)
-        req_path = [""]
-    else:
-        req_path = path.copy()
-    
+
+    logging.debug("Start HHHHHHHHHHHHHHH")
     while True: 
         if "." not in lexer:
             break
@@ -119,11 +124,20 @@ def parse_commands(commnads_text):
         lexer.pop(ind1)
         if ind1>0:
             lexer.pop(ind1-1)
+    logging.debug("Stop HHHHHHHHHHHHHHH")
 
     
     logging.debug(str([(lexer)]))
-    logging.debug(str([(l1)]))
+    return lexer
 
+def compile_commands(parsed_commands):
+    l1 = get_commands_list()
+    logging.debug(str([(l1)]))
+    if (len(parsed_commands)>0) and (parsed_commands[0]=="/"):
+        parsed_commands.pop(0)
+        req_path = [""]
+    else:
+        req_path = path.copy()
     for itm in req_path:
         if itm in l1:
             l1 = l1[itm]
@@ -131,7 +145,7 @@ def parse_commands(commnads_text):
     req_type= "path"
 
     cnt =0 
-    for itm in lexer:
+    for itm in parsed_commands:
         logging.debug(str(["AAAAAAAAAAAAAAAAAA",itm,itm in l1]))
         if itm == "":
             continue
@@ -146,15 +160,16 @@ def parse_commands(commnads_text):
             req_path.append(itm+".py")
             cnt +=1
         else:
+            req_path.append(None)
             logging.error("Bad command")
             break
     for i in range(cnt):
-        lexer.pop(0)
+        parsed_commands.pop(0)
     arguments = {}
     if req_type == "command":
         eq = False
         name = None
-        for itm in lexer:
+        for itm in parsed_commands:
             logging.debug(str(["fff",itm]))
             if eq :
                 if name is not None:
@@ -181,27 +196,49 @@ def parse_commands(commnads_text):
     if len(req_path)>1 and req_path[0]!="":
         req_path.insert(0,"")
     if req_type == "path":
-        return [{"path":req_path,"type":req_type,"start":0,"end":len(commnads_text)}]
+        return [{"path":req_path,"type":req_type,"start":0,"end":0}]
     elif req_type == "command":
-        return [{"path":req_path,"arguments":arguments,"type":req_type,"start":0,"end":len(commnads_text)}]
+        return [{"path":req_path,"arguments":arguments,"type":req_type,"start":0,"end":0}]
+
 
 class MyCompleter(Completer):
     def get_completions(self, document, complete_event):
-        return []
         logging.debug(document.cursor_position)
         logging.debug(document.text)
         # print(document.)
-        req = parse_commands(document.text)
+        lex = parse_commands(document.text)
+        req = compile_commands(lex)
+
+        logging.debug(str(["NNNNN",lex,req]))
         l1 = get_commands_list()
         l2 = l1
         for cmd in req:
-            if (document.cursor_position >=cmd["start"])and( document.cursor_position<=cmd["end"]):
+            # if (document.cursor_position >=cmd["start"])and( document.cursor_position<=cmd["end"]):
+            if 1:
                 logging.debug("AAAAAAAAAAA")
-                # for itm in cmd["path"]:
+                if cmd["type"]=="path":
+                    for itm in cmd["path"][1:]:
+                        logging.debug(str(["IIIIIIIIIII",itm]))
+                        
+                        if itm is not None:
+                            l2 = l2[itm]
+                elif cmd["type"]=="command":
+                    module = load_module(cmd["path"])
+                    l2 = getattr(module,"arguments")
+                    logging.debug(str(["RRRRRRRRRRRR",l2]))
+                    l2 = [x[0] for x in l2]
                     # continue
                     # l2 = l2[itm]
         # filter(lambda x:True,l1)
-        l1 = [Completion(x) for x in l2]
+        logging.debug(str(["LLLLLLLLLLLLL",l2]))
+        l1 = []
+        filter_text = lex[-1] if len(lex)>0 else ""
+        for itm in l2:
+            if itm.startswith(filter_text):
+                if itm.endswith(".py"):
+                    l1.append(Completion(itm[:-3],-1*len(filter_text)))
+                else:
+                    l1.append(Completion(itm,-1*len(filter_text)))
         return iter(l1)
 completer = MyCompleter()
 # completer = None
@@ -222,16 +259,18 @@ while True:
         break
     else:
         l1 = get_commands_list()
-        req = parse_commands(text)
+        lex = parse_commands(text)
+        req = compile_commands(lex)
         for cmd in req:
             if cmd["type"]=="path":
-                path = cmd["path"]
+                if cmd["path"][-1] is None:
+                    path = cmd["path"][:-1]
+                else:
+                    path = cmd["path"]
             elif cmd["type"]=="command":
                 print(cmd)
                 try:
-                    name = ("modules"+(".".join(cmd["path"])))[:-3]
-                    module = importlib.import_module(name)
-                    print(module)
+                    module = load_module(cmd["path"])
                     func = getattr(module,"call") 
                     res = func(ibs, cmd["arguments"])
                     print(res)
